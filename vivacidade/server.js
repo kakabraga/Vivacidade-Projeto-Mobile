@@ -1,94 +1,147 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const { Sequelize, DataTypes } = require('sequelize');
-const cors = require('cors');
+const http = require('http');
+const mysql = require('mysql2');
+const { parse } = require('querystring'); // Para lidar com o corpo da requisição
 
-const app = express();
-
-// Configuração do CORS - permitindo todas as origens
-// Permite todas as origens durante o desenvolvimento local
-app.use(cors({
-    origin: ['http://localhost:8081', 'http://192.168.0.249:8081', 'exp://192.168.0.249:19000'], // Expo inclui essa URL
-  }));
-  
-  
-  
-
-// Rota de teste
-app.post('/', (req, res) => {
-  res.send('API funcionando!');
-});
-
-// Configuração do banco de dados
-const sequelize = new Sequelize('vivacidade', 'root', '1234', {
+const db = mysql.createConnection({
   host: 'localhost',
-  dialect: 'mysql',
+  user: 'root',      // Usuário do MySQL (padrão é root)
+  password: '1234',  // Senha do MySQL (deixe vazio se não tiver senha)
+  database: 'vivacidade' // Nome do banco de dados
 });
 
-// Middleware para ler o corpo da requisição
-app.use(bodyParser.json());
-
-// Testando a conexão com o MySQL
-sequelize.authenticate()
-  .then(() => {
-    console.log('Conectado ao banco de dados MySQL');
-  })
-  .catch((err) => {
-    console.error('Erro de conexão:', err);
-  });
-
-// Definir o modelo de Usuário
-const User = sequelize.define('User', {
-  nome: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  email: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    unique: true,
-  },
-  senha: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
+db.connect(err => {
+  if (err) {
+    console.error('Erro ao conectar ao MySQL:', err);
+  } else {
+    console.log('Conectado ao MySQL!');
+  }
 });
 
-// Sincronizar o modelo com o banco de dados (criar a tabela se não existir)
-sequelize.sync()
-  .then(() => {
-    console.log('Tabela de usuários sincronizada com sucesso!');
-  })
-  .catch((error) => {
-    console.error('Erro ao sincronizar a tabela:', error);
-  });
+const server = http.createServer((req, res) => {
+  const { method, url } = req;
 
-// Rota para registrar um novo usuário
-app.post('/register', async (req, res) => {
-    const { nome, email, senha } = req.body;
-  
-    try {
-      // Verificar se o usuário já existe no banco de dados
-      const existingUser = await User.findOne({ where: { email } });
-      if (existingUser) {
-        return res.status(400).json({ message: 'Email já registrado!' });
+  // Rota para verificar a existência da tabela "posts"
+  if (url === '/check-table' && method === 'GET') {
+    db.query("SHOW TABLES LIKE 'posts'", (err, result) => {
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Erro ao verificar a tabela' }));
       }
-  
-      // Criar um novo usuário
-      const newUser = await User.create({
-        nome,
-        email,
-        senha, // Em um sistema real, você deve criptografar a senha!
-      });
-  
-      return res.status(201).json({ message: 'Usuário registrado com sucesso!', user: newUser });
-    } catch (error) {
-      console.error('Erro ao registrar usuário:', error);
-      return res.status(500).json({ message: 'Erro ao registrar usuário.' });
-    }
-  });
 
-// Iniciar o servidor na porta 1024
-app.listen(1024, () => {
-  console.log('Backend rodando na porta 1024');
+      if (result.length > 0) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Tabela "posts" existe no banco de dados.' }));
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Tabela "posts" não existe no banco de dados.' }));
+      }
+    });
+  } 
+
+  // Rota para criar um novo post
+  else if (url === '/posts' && method === 'POST') {
+    let body = '';
+    
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+
+    req.on('end', () => {
+      try {
+        // Parse do corpo da requisição
+        const { title, content, image } = JSON.parse(body);
+
+        // Verificação de campos obrigatórios
+        if (!title || !content || !image) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'Todos os campos (title, content, image) são obrigatórios.' }));
+        }
+
+        const sql = 'INSERT INTO posts (title, content, image) VALUES (?, ?, ?)';
+        
+        db.query(sql, [title, content, image], (err, result) => {
+          if (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ error: 'Erro ao criar o post' }));
+          }
+          
+          res.writeHead(201, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Post criado com sucesso!' }));
+        });
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Erro ao processar os dados.' }));
+      }
+    });
+  } 
+  else if (url === '/posts' && method === 'GET') {
+    db.query('SELECT * FROM posts', (err, result) => {
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Erro ao buscar posts' }));
+      }
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ posts: result }));
+    });
+  }
+  else if (url.startsWith('/posts/') && method === 'PUT') {
+    const postId = url.split('/')[2]; // Pega o ID do post da URL
+    let body = '';
+    
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+  
+    req.on('end', () => {
+      const { title, content, image } = JSON.parse(body);
+      
+      // Verifique se todos os campos estão presentes
+      if (!title || !content || !image) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Todos os campos (title, content, image) são obrigatórios.' }));
+      }
+      
+      const sql = 'UPDATE posts SET title = ?, content = ?, image = ? WHERE id = ?';
+      
+      db.query(sql, [title, content, image, postId], (err, result) => {
+        if (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'Erro ao atualizar o post' }));
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Post atualizado com sucesso!' }));
+      });
+    });
+  }
+  else if (url.startsWith('/posts/') && method === 'DELETE') {
+    const postId = url.split('/')[2]; // Pega o ID do post da URL
+    
+    const sql = 'DELETE FROM posts WHERE id = ?';
+    
+    db.query(sql, [postId], (err, result) => {
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Erro ao deletar o post' }));
+      }
+      
+      if (result.affectedRows === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ message: 'Post não encontrado' }));
+      }
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ message: 'Post deletado com sucesso!' }));
+    });
+  }
+  // Rota não encontrada
+  else {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Rota não encontrada');
+  }
+});
+
+server.listen(3000, () => {
+  console.log('Servidor rodando em http://localhost:3000');
 });
