@@ -7,4 +7,3 @@ router.post('/create', createUsers);
 router.put('/update/:id', updateUser);
 router.delete('/delete/:id', deleteUser );
 module.exports = router;
-// http://localhost:3000/api/users/update/2
