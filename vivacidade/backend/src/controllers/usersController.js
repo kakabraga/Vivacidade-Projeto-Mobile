@@ -11,7 +11,6 @@ const getUsers = (req, res) => {
 
 const createUsers = (req, res) => {
     const { nome, email, senha } = req.body;
-
     if (!nome) {
         return res.status(400).json({ error: 'Nome é obrigatório' });
     }
@@ -21,12 +20,17 @@ const createUsers = (req, res) => {
     if (!senha) {
         return res.status(400).json({ error: 'Senha é obrigatória' });
     }
-
-    Users.createUsers(nome, email, senha, (err, result) => {  // Ajuste no nome da função do model
-        if (err) {
-            return res.status(500).json({ error: 'Erro ao criar usuário' });
+    
+    Users.getByEmail (email, (err, results) => {
+        if (results.length > 0) {
+            return res.status(409).json({ error: 'Este email já está cadastrado!'});
         }
-        res.status(201).json({ message: 'Usuário criado com sucesso!' }); // Mensagem correta
+        Users.createUsers(nome, email, senha, (err, result) => {  // Ajuste no nome da função do model
+            if (err) {
+                return res.status(500).json({ error: 'Erro ao criar usuário' });
+            }
+            res.status(201).json({ message: 'Usuário criado com sucesso!' }); // Mensagem correta
+        });
     });
 };
 
@@ -70,6 +74,7 @@ const getByEmail = (req, res) => {
     if (!email) {
         return res.status(400).json({error: "Email é obrigatório"});
     }
+    
     Users.getByEmail (email, (err, results) => {
         if (err) {
             return res.status(500).json({ error: 'Error ao selecionar usuarios'});
