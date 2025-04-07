@@ -16,5 +16,12 @@ const deleteUser = (id, callback) => {
     const sql = "DELETE FROM users WHERE id=?";
     db.query(sql, [id], callback);
 }
+const getByEmail = (email, callback) => {
+  const sql = "SELECT * FROM users WHERE email=?";
 
-module.exports = { getAllUsers, createUsers, updateUser, deleteUser };
+  db.query(sql, [email], (err, result) => {
+    callback(err, result);
+  });
+}
+
+module.exports = { getAllUsers, createUsers, updateUser, deleteUser, getByEmail};

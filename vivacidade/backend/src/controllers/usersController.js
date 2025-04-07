@@ -65,5 +65,18 @@ const deleteUser = (req, res) => {
     });
 };
 
+const getByEmail = (req, res) => {
+    const { email } = req.params;
+    if (!email) {
+        return res.status(400).json({error: "Email é obrigatório"});
+    }
+    Users.getByEmail (email, (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: 'Error ao selecionar usuarios'});
+        }
 
-module.exports = { getUsers, createUsers, updateUser, deleteUser};
+        res.json(results);
+    })
+}
+
+module.exports = { getUsers, createUsers, updateUser, deleteUser, getByEmail};

@@ -64,4 +64,5 @@ const listaPostPorId = (req, res) => {
     });
 }
 
+
 module.exports = { getPosts, createPost, updatePost, deletePost, listaPostPorId };
