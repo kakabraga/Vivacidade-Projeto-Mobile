@@ -19,7 +19,7 @@ const deleteUser = (id, callback) => {
     db.query(sql, [id], callback);
 }
 const getByEmail = (email, callback) => {
-  const sql = "SELECT * FROM users WHERE email=?";
+  const sql = "SELECT id, nome, email, senha FROM users WHERE email=?";
 
   db.query(sql, [email], (err, result) => {
     callback(err, result);
